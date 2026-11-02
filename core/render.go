@@ -333,8 +333,32 @@ func filterGraph(d CursorData, segs []Segment, canvas W, cursorImage bool) strin
 	y := linearExpr(yTrack, "on/60")
 	fmt.Fprintf(&graph, "[framed]zoompan=z='%s':x='clip((%s)-iw/zoom/2,0,iw-iw/zoom)':y='clip((%s)-ih/zoom/2,0,ih-ih/zoom)':d=1:s=%dx%d:fps=%d[camera];",
 		zoom, x, y, canvas.W, canvas.H, renderFPS)
-	graph.WriteString("[camera]format=yuv420p[out]")
+	if motion := cameraMotionExpr(d, segs); motion == "" {
+		graph.WriteString("[camera]format=yuv420p[out]")
+	} else {
+		fmt.Fprintf(&graph, "[camera]tmix=frames=3:weights='1 2 4':enable='%s',format=yuv420p[out]", motion)
+	}
 	return graph.String()
+}
+
+// cameraMotionExpr lists the windows during which the camera is actually
+// moving; tmix blends frames only there, keeping rest frames crisp.
+func cameraMotionExpr(d CursorData, segs []Segment) string {
+	var windows []string
+	for _, segment := range segs {
+		if segment.Zoom <= 1 {
+			continue
+		}
+		windows = append(windows,
+			fmt.Sprintf("between(t,%s,%s)", num(segment.Start), num(segment.Start+.8)),
+			fmt.Sprintf("between(t,%s,%s)", num(segment.End), num(segment.End+.8)))
+		for _, event := range zoomEvents(d) {
+			if event.T > segment.Start+.1 && event.T < segment.End {
+				windows = append(windows, fmt.Sprintf("between(t,%s,%s)", num(event.T), num(event.T+.55)))
+			}
+		}
+	}
+	return strings.Join(windows, "+")
 }
 
 func Export(dir, out string, d CursorData, segs []Segment, o ExportOpts) error {
