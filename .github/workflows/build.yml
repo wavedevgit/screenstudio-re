@@ -44,6 +44,7 @@ jobs:
       - run: go build -o screenstudio-re-linux-amd64 .
       - run: go build -o screenstudio-re-windows-amd64.exe .
         env:
+          GOOS: windows
           CGO_ENABLED: "0"
       - run: gh release create "$GITHUB_REF_NAME" screenstudio-re-linux-amd64 screenstudio-re-windows-amd64.exe --generate-notes
         env:
